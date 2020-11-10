@@ -1,0 +1,12 @@
+sdk-version: 1.6.0
+name: Currency
+version: 1.0.0
+source: daml
+parties:
+  - Bank
+dependencies:
+- daml-prim
+- daml-stdlib
+- daml-script
+sandbox-options:
+- --ledgerid=Currency-sandbox

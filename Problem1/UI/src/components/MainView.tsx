@@ -15,7 +15,7 @@ const MainView: React.FC = () => {
   const username = useParty();
   const myUserResult = useStreamFetchByKey(Currency.Publisher, () => username, [username]);
   const myUser = myUserResult.contract?.payload;
-  console.log(myUser)
+  console.log(myUserResult);
   const allOwners = useStreamQuery(Currency.Owner).contracts;
 // USERS_END
 
@@ -23,14 +23,14 @@ const MainView: React.FC = () => {
   const Owners = useMemo(() =>
     allOwners
     .map(user => user.payload),
-    [allOwners, username]);
+    [allOwners]);
 
   // FOLLOW_BEGIN
   const ledger = useLedger();
 
-  const publish = async (owner: Party, amount: Decimal): Promise<boolean> => {
+  const publish = async (ownerId: Party, amount: Decimal): Promise<boolean> => {
     try {
-      await ledger.exerciseByKey(Currency.Publisher.Publish, username, {owner, amount});
+      await ledger.exerciseByKey(Currency.Publisher.Publish, username, {ownerId, amount});
       return true;
     } catch (error) {
       alert(`Unknown error:\n${error}`);

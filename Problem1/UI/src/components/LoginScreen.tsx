@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React, { useCallback } from 'react'
-import { Button, Form, Grid, Header, Image, Segment, Dropdown } from 'semantic-ui-react'
+import { Button, Form, Grid, Header, Image, Segment } from 'semantic-ui-react'
 import Credentials, { computeCredentials } from '../Credentials';
 import Ledger from '@daml/ledger';
 import { Currency } from '@daml.js/Currency';
@@ -28,16 +28,25 @@ const LoginScreen: React.FC<Props> = ({onLogin}) => {
   const login = useCallback(async (credentials: Credentials) => {
     try {
       const ledger = new Ledger({token: credentials.token, httpBaseUrl});
-      let userContract = await ledger.fetchByKey(Currency.Publisher, credentials.party);
-      if (userContract === null) {
-        const user = {name: credentials.party, value: '0'};
-        userContract = await ledger.create(Currency.Publisher, user);
+      if (loginType === 'publisher') {
+        let publisherContract = await ledger.fetchByKey(Currency.Publisher, credentials.party);
+        if (publisherContract === null) {
+          const publisher: Currency.Publisher = {name: credentials.party, total: '0'};
+          publisherContract = await ledger.create(Currency.Publisher, publisher);
+        }
+      } else {
+        let ownerContract = await ledger.fetchByKey(Currency.Owner, {_1: 'Bank', _2: credentials.party});
+        if (ownerContract === null) {
+          const cash: Currency.Currency = {publisher: 'Bank', amount: '0', owner: credentials.party };
+          const owner: Currency.Owner = {name: credentials.party, cash};
+          ownerContract = await ledger.create(Currency.Owner, owner);
+        }
       }
       onLogin(credentials);
     } catch(error) {
       alert(`Unknown error:\n${error}`);
     }
-  }, [onLogin]);
+  }, [onLogin, loginType]);
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();

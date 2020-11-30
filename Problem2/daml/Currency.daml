@@ -1,0 +1,139 @@
+module Currency where
+
+-- 引入when
+-- import DA.Action
+-- 引入 allocateParty createCmd exerciseCmd
+import Daml.Script
+-- 引入 dedupSort
+-- import DA.List
+
+template Issuer
+  with
+    name: Party
+    total: Numeric 2
+  where
+    signatory name
+    key (name, "Issuer"): (Party, Text)
+    maintainer key._1
+
+    nonconsuming choice Issue: (ContractId Issuer, ContractId Owner)
+      with
+        amount : Numeric 2
+        ownerId : ContractId Owner
+      controller
+        name
+      do
+        archive self
+        issuerId <- create this with total =  total + amount
+        ownerId <- exercise ownerId ReceiveIssue with amount, issuer = name
+        return (issuerId, ownerId)
+
+data Cash = Cash with
+  amount : Numeric 2
+  issuer : Party
+    deriving (Eq, Show, Ord)
+
+template Owner
+  with
+    name: Party
+    cash: Cash
+  where
+    signatory name
+    key (name, "Owner"): (Party, Text)
+    maintainer key._1
+    nonconsuming choice ReceiveIssue: ContractId Owner
+      with
+        amount: Numeric 2
+        issuer: Party
+      controller
+        cash.issuer
+      do
+        assertMsg "issuer is difference" (cash.issuer == issuer)
+        archive self
+        create this with cash = cash with amount = cash.amount + amount
+
+    nonconsuming choice ProposeTransfer: ContractId Proposal
+      with
+        amount: Numeric 2
+        receiver: Party
+      controller
+        name
+      do
+        assertMsg "You don't have enough cash" (cash.amount >= amount)
+        archive self
+        create this with cash = cash with amount = cash.amount - amount
+        create Proposal with proposer = name, contract = TransferContract with partyA = name, amount, partyB = receiver
+
+    nonconsuming choice ReceiveTransfer: ContractId Owner
+      with
+        id: ContractId TransferContract
+      controller
+        name
+      do
+        transferProposal <- fetch id
+        exercise id Accept
+        archive self
+        create this with cash = cash with amount = cash.amount + transferProposal.amount
+
+template TransferContract
+  with
+    partyA: Party
+    amount: Numeric 2
+    partyB: Party
+  where
+    signatory partyA, partyB
+    choice Accept : ()
+      controller partyB
+      do
+        return () 
+
+
+type ContractType = TransferContract
+template Proposal
+  with
+    proposer: Party
+    contract: ContractType
+  where
+    signatory proposer
+    observer contract.partyB
+    choice ProposalAccept : ContractId ContractType
+      controller contract.partyB
+      do
+        create contract
+
+cash_test = do
+  bank <- allocateParty "Bank"
+  -- giver <- allocateParty "giver"
+  receiver <- allocateParty "receiver"
+  partyA <- submit bank do
+    createCmd Owner with
+      name = bank
+      cash = Cash with
+        amount = 0.0
+        issuer = bank
+  partyB <- submit receiver do
+    createCmd Owner with
+      name = receiver
+      cash = Cash with
+        amount = 0.0
+        issuer = bank
+  issuer <- submit bank do
+    createCmd Issuer with
+      name = bank
+      total = 0.0
+
+  (issuer, partyA) <- submit bank do
+    exerciseCmd issuer Issue with amount = 1000.0, ownerId = partyA
+  
+  proposalId <- submit bank do
+    exerciseCmd partyA ProposeTransfer with amount = 1000.0, receiver
+  
+  transferId <- submit receiver do
+    exerciseCmd proposalId ProposalAccept
+  
+  partyB <- submit receiver do
+    exerciseCmd partyB ReceiveTransfer with id = transferId
+
+  
+  return ()
+  

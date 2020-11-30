@@ -1,0 +1,49 @@
+module Currency where
+
+template Publisher
+  with
+    name: Party
+    total: Decimal
+  where
+    signatory name
+    key name: Party
+    maintainer key
+
+    nonconsuming choice Publish: ()--ContractId Owner
+      with
+        amount : Decimal
+        ownerId : ContractId Owner
+      controller
+        name
+      do
+        archive self
+        create this with total =  total + amount
+        exercise ownerId ReceivePublish with amount
+        return ()
+
+type OwnerKey = (Party, Party)
+template Owner
+  with
+    name: Party
+    cash: Currency
+  where
+    signatory name
+    key (name, cash.publisher): OwnerKey
+    maintainer key._1
+    nonconsuming choice ReceivePublish: () --ContractId Owner
+      with
+        amount: Decimal
+      controller
+        cash.publisher
+      do
+        archive self
+        create this with cash = cash with amount = cash.amount + amount
+        return ()
+
+template Currency
+  with
+    publisher: Party
+    amount: Decimal
+    owner: Party
+  where
+    signatory owner
